@@ -4,16 +4,16 @@ from .models import FreezerSensorData
 
 class FreezerSensorDataSerializer(serializers.ModelSerializer):
     # Accept the external IoT payload keys while storing normalized fields.
-    DeviceId = serializers.CharField(source='device_id', required=False)
+    DeviceId = serializers.CharField(source='device_id', required=False, write_only=True)
     device_id = serializers.CharField(required=False)
-    ChipMac = serializers.CharField(source='chip_mac', required=False)
+    ChipMac = serializers.CharField(source='chip_mac', required=False, write_only=True)
     chip_mac = serializers.CharField(required=False)
-    Temp = serializers.FloatField(source='temperature', required=False)
+    Temp = serializers.FloatField(source='temperature', required=False, write_only=True)
     temperature = serializers.FloatField(required=False)
-    BatPer = serializers.FloatField(source='battery_percent', required=False)
+    BatPer = serializers.FloatField(source='battery_percent', required=False, write_only=True)
     battery_percent = serializers.FloatField(required=False)
-    Current = serializers.FloatField(source='current', required=False)
-    Energy = serializers.FloatField(source='energy', required=False)
+    Current = serializers.FloatField(source='current', required=False, write_only=True)
+    Energy = serializers.FloatField(source='energy', required=False, write_only=True)
     lng = serializers.FloatField(required=False)
 
     class Meta:
@@ -61,3 +61,21 @@ class FreezerSensorDataSerializer(serializers.ModelSerializer):
                 'detail': f"Missing required fields: {', '.join(missing)}"
             })
         return attrs
+
+
+class FreezerSensorDataResponseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FreezerSensorData
+        fields = [
+            'id',
+            'device_id',
+            'chip_mac',
+            'temperature',
+            'battery_percent',
+            'current',
+            'energy',
+            'lat',
+            'lng',
+            'created_at',
+        ]
+        read_only_fields = fields
