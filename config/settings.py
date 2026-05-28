@@ -100,7 +100,7 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.TokenAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',
+        'rest_framework.permissions.IsAuthenticated',
     ],
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
@@ -119,8 +119,11 @@ SPECTACULAR_SETTINGS = {
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
     'COMPONENT_SPLIT_REQUEST': True,
+    'SERVE_PERMISSIONS': ['rest_framework.permissions.IsAuthenticated'],
+    'SERVE_AUTHENTICATION': ['rest_framework.authentication.TokenAuthentication'],
     'TAGS': [
         {'name': 'Freezer data', 'description': 'Ingest and query freezer telemetry'},
+        {'name': 'Auth', 'description': 'Obtain API tokens'},
     ],
 }
 
