@@ -3,7 +3,7 @@ from .models import FreezerSensorData
 
 
 class FreezerSensorDataSerializer(serializers.ModelSerializer):
-    # Accept the external IoT payload keys while storing normalized fields.
+    # Accept all payload values as strings (IoT devices often send string values).
     DeviceId = serializers.CharField(source='device_id', required=False, write_only=True)
     device_id = serializers.CharField(required=False)
     BatchCode = serializers.CharField(source='batch_code', required=False, write_only=True)
@@ -12,21 +12,38 @@ class FreezerSensorDataSerializer(serializers.ModelSerializer):
     serial_number = serializers.CharField(required=False)
     ChipMac = serializers.CharField(source='chip_mac', required=False, write_only=True)
     chip_mac = serializers.CharField(required=False)
-    Temp = serializers.FloatField(source='temperature', required=False, write_only=True)
-    temperature = serializers.FloatField(required=False)
-    BatPer = serializers.FloatField(source='battery_percent', required=False, write_only=True)
-    battery_percent = serializers.FloatField(required=False)
-    Current = serializers.FloatField(source='current_generation', required=False, write_only=True)
-    current_generation = serializers.FloatField(required=False)
-    CurrentCons = serializers.FloatField(source='current_consumption', required=False, write_only=True)
-    current_consumption = serializers.FloatField(required=False)
-    Energy = serializers.FloatField(source='energy_generation', required=False, write_only=True)
-    energy_generation = serializers.FloatField(required=False)
-    EnergyCons = serializers.FloatField(source='energy_consumption', required=False, write_only=True)
-    energy_consumption = serializers.FloatField(required=False)
-    NetSignal = serializers.FloatField(source='network_signal', required=False, write_only=True)
-    network_signal = serializers.FloatField(required=False)
-    lng = serializers.FloatField(required=False)
+    Temp = serializers.CharField(source='temperature', required=False, write_only=True)
+    temperature = serializers.CharField(required=False)
+    BatPer = serializers.CharField(source='battery_percent', required=False, write_only=True)
+    battery_percent = serializers.CharField(required=False)
+    Current = serializers.CharField(source='current_generation', required=False, write_only=True)
+    current_generation = serializers.CharField(required=False)
+    CurrentCons = serializers.CharField(source='current_consumption', required=False, write_only=True)
+    current_consumption = serializers.CharField(required=False)
+    Energy = serializers.CharField(source='energy_generation', required=False, write_only=True)
+    energy_generation = serializers.CharField(required=False)
+    EnergyCons = serializers.CharField(source='energy_consumption', required=False, write_only=True)
+    energy_consumption = serializers.CharField(required=False)
+    NetSignal = serializers.CharField(source='network_signal', required=False, write_only=True)
+    network_signal = serializers.CharField(required=False)
+    lat = serializers.CharField(required=False)
+    lng = serializers.CharField(required=False)
+
+    FIELD_ALIASES = {
+        'device_id': ('device_id', 'DeviceId'),
+        'batch_code': ('batch_code', 'BatchCode'),
+        'serial_number': ('serial_number', 'SerialNumber'),
+        'chip_mac': ('chip_mac', 'ChipMac'),
+        'temperature': ('temperature', 'Temp'),
+        'battery_percent': ('battery_percent', 'BatPer'),
+        'current_generation': ('current_generation', 'Current'),
+        'current_consumption': ('current_consumption', 'CurrentCons'),
+        'energy_generation': ('energy_generation', 'Energy'),
+        'energy_consumption': ('energy_consumption', 'EnergyCons'),
+        'network_signal': ('network_signal', 'NetSignal'),
+        'lat': ('lat',),
+        'lng': ('lng',),
+    }
 
     class Meta:
         model = FreezerSensorData
@@ -66,67 +83,54 @@ class FreezerSensorDataSerializer(serializers.ModelSerializer):
                 return self.initial_data[key]
         return None
 
+    def _resolve_raw(self, attrs, field_name, *alias_keys):
+        value = attrs.get(field_name)
+        if value not in (None, ''):
+            return value
+        return self._first_present(*alias_keys)
+
+    @staticmethod
+    def _coerce_str(value, field_name):
+        if value is None or value == '':
+            return None
+        return str(value).strip()
+
+    def _coerce_float(self, value, field_name):
+        if value is None or value == '':
+            return None
+        if isinstance(value, bool):
+            raise serializers.ValidationError({field_name: 'A valid number is required.'})
+        if isinstance(value, (int, float)):
+            return float(value)
+        try:
+            return float(str(value).strip())
+        except (TypeError, ValueError) as exc:
+            raise serializers.ValidationError({field_name: 'A valid number is required.'}) from exc
+
     def validate(self, attrs):
-        attrs['device_id'] = attrs.get('device_id') or self._first_present('device_id', 'DeviceId')
-        attrs['batch_code'] = attrs.get('batch_code') or self._first_present('batch_code', 'BatchCode')
-        attrs['serial_number'] = attrs.get('serial_number') or self._first_present('serial_number', 'SerialNumber')
-        attrs['chip_mac'] = attrs.get('chip_mac') or self._first_present('chip_mac', 'ChipMac')
-        attrs['temperature'] = (
-            attrs['temperature'] if attrs.get('temperature') is not None else self._first_present('temperature', 'Temp')
-        )
-        attrs['battery_percent'] = (
-            attrs['battery_percent']
-            if attrs.get('battery_percent') is not None
-            else self._first_present('battery_percent', 'BatPer')
-        )
-        attrs['current_generation'] = (
-            attrs['current_generation']
-            if attrs.get('current_generation') is not None
-            else self._first_present('current_generation', 'Current')
-        )
-        attrs['current_consumption'] = (
-            attrs['current_consumption']
-            if attrs.get('current_consumption') is not None
-            else self._first_present('current_consumption', 'CurrentCons')
-        )
-        attrs['energy_generation'] = (
-            attrs['energy_generation']
-            if attrs.get('energy_generation') is not None
-            else self._first_present('energy_generation', 'Energy')
-        )
-        attrs['energy_consumption'] = (
-            attrs['energy_consumption']
-            if attrs.get('energy_consumption') is not None
-            else self._first_present('energy_consumption', 'EnergyCons')
-        )
-        attrs['network_signal'] = (
-            attrs['network_signal']
-            if attrs.get('network_signal') is not None
-            else self._first_present('network_signal', 'NetSignal')
-        )
+        errors = {}
+        coerced = {}
 
-        required_fields = {
-            'device_id': attrs.get('device_id'),
-            'batch_code': attrs.get('batch_code'),
-            'serial_number': attrs.get('serial_number'),
-            'chip_mac': attrs.get('chip_mac'),
-            'temperature': attrs.get('temperature'),
-            'battery_percent': attrs.get('battery_percent'),
-            'current_generation': attrs.get('current_generation'),
-            'current_consumption': attrs.get('current_consumption'),
-            'energy_generation': attrs.get('energy_generation'),
-            'energy_consumption': attrs.get('energy_consumption'),
-            'network_signal': attrs.get('network_signal'),
-            'lat': attrs.get('lat'),
-            'lng': attrs.get('lng'),
-        }
+        for field_name, alias_keys in self.FIELD_ALIASES.items():
+            raw = self._resolve_raw(attrs, field_name, *alias_keys)
+            try:
+                if field_name in ('device_id', 'batch_code', 'serial_number', 'chip_mac'):
+                    coerced[field_name] = self._coerce_str(raw, field_name)
+                else:
+                    coerced[field_name] = self._coerce_float(raw, field_name)
+            except serializers.ValidationError as exc:
+                errors.update(exc.detail)
 
-        missing = [name for name, value in required_fields.items() if value in (None, '')]
+        if errors:
+            raise serializers.ValidationError(errors)
+
+        missing = [name for name, value in coerced.items() if value in (None, '')]
         if missing:
             raise serializers.ValidationError({
                 'detail': f"Missing required fields: {', '.join(missing)}"
             })
-        return attrs
+
+        return coerced
 
 
 class FreezerSensorDataResponseSerializer(serializers.ModelSerializer):
