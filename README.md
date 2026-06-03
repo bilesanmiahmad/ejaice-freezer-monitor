@@ -101,6 +101,8 @@ python manage.py createsuperuser
 - `POST /api/v1/auth/token/` obtain API token (username + password)
 - `POST /api/v1/freezer-data/` create new freezer telemetry row
 - `GET /api/v1/freezer-data/last/` latest row globally
+- `GET /api/v1/freezer-data/last/all/` latest row per freezer (`device_id`)
+- `GET /api/v1/freezer-data/last/all/serial/` latest row per freezer (`serial_number`)
 - `GET /api/v1/freezer-data/device/{device_id}/` latest row by device
 - `GET /api/schema/` OpenAPI schema (public)
 - `GET /api/docs/` Swagger UI (public; use **Authorize** to add your token for try-it-out requests)
