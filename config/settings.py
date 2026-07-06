@@ -122,6 +122,7 @@ SPECTACULAR_SETTINGS = {
     'SERVE_PERMISSIONS': ['rest_framework.permissions.AllowAny'],
     'TAGS': [
         {'name': 'Freezer data', 'description': 'Ingest and query freezer telemetry'},
+        {'name': 'Freezers', 'description': 'Registered freezer lookup'},
         {'name': 'Auth', 'description': 'Obtain API tokens'},
     ],
 }

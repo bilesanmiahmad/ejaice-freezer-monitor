@@ -1,5 +1,35 @@
 from rest_framework import serializers
-from .models import FreezerSensorData
+from .models import Freezer, FreezerSensorData
+
+
+class FreezerSerializer(serializers.ModelSerializer):
+    status_label = serializers.CharField(source='get_status_display', read_only=True)
+
+    class Meta:
+        model = Freezer
+        fields = [
+            'id',
+            'device_id',
+            'batch_code',
+            'serial_number',
+            'chip_mac',
+            'status',
+            'status_label',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = fields
+
+
+class FreezerCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Freezer
+        fields = ['device_id', 'batch_code', 'serial_number', 'chip_mac', 'status']
+
+    def validate_status(self, value):
+        if value not in (Freezer.Status.OFF, Freezer.Status.ON):
+            raise serializers.ValidationError('Status must be 0 (off) or 1 (on).')
+        return value
 
 
 class FreezerSensorDataSerializer(serializers.ModelSerializer):
