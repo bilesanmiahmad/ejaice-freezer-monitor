@@ -1,5 +1,27 @@
+import math
+
 from rest_framework import serializers
 from .models import Freezer, FreezerSensorData
+
+FREEZER_SENSOR_FLOAT_FIELDS = (
+    'temperature',
+    'battery_percent',
+    'current_generation',
+    'current_consumption',
+    'energy_generation',
+    'energy_consumption',
+    'network_signal',
+    'lat',
+    'lng',
+)
+
+
+def sanitize_json_float(value):
+    if value is None:
+        return None
+    if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+        return None
+    return value
 
 
 class FreezerSerializer(serializers.ModelSerializer):
@@ -131,11 +153,16 @@ class FreezerSensorDataSerializer(serializers.ModelSerializer):
         if isinstance(value, bool):
             raise serializers.ValidationError({field_name: 'A valid number is required.'})
         if isinstance(value, (int, float)):
-            return float(value)
-        try:
-            return float(str(value).strip())
-        except (TypeError, ValueError) as exc:
-            raise serializers.ValidationError({field_name: 'A valid number is required.'}) from exc
+            float_value = float(value)
+        else:
+            try:
+                float_value = float(str(value).strip())
+            except (TypeError, ValueError) as exc:
+                raise serializers.ValidationError({field_name: 'A valid number is required.'}) from exc
+
+        if math.isnan(float_value) or math.isinf(float_value):
+            raise serializers.ValidationError({field_name: 'A valid finite number is required.'})
+        return float_value
 
     def validate(self, attrs):
         errors = {}
@@ -172,15 +199,13 @@ class FreezerSensorDataResponseSerializer(serializers.ModelSerializer):
             'batch_code',
             'serial_number',
             'chip_mac',
-            'temperature',
-            'battery_percent',
-            'current_generation',
-            'current_consumption',
-            'energy_generation',
-            'energy_consumption',
-            'network_signal',
-            'lat',
-            'lng',
+            *FREEZER_SENSOR_FLOAT_FIELDS,
             'created_at',
         ]
         read_only_fields = fields
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        for field_name in FREEZER_SENSOR_FLOAT_FIELDS:
+            data[field_name] = sanitize_json_float(data.get(field_name))
+        return data
