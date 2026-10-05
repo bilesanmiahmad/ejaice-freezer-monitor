@@ -7,6 +7,7 @@ urlpatterns = [
     path('freezers/', views.freezer_list_create, name='freezer_list_create'),
     path('freezers/<int:pk>/', views.get_freezer_detail, name='get_freezer_detail'),
     path('freezers/<int:pk>/toggle-status/', views.toggle_freezer_status, name='toggle_freezer_status'),
+    path('freezers/<int:pk>/assign/', views.assign_freezer_client, name='assign_freezer_client'),
     path('freezer-data/', views.create_freezer_sensor_data, name='create_freezer_sensor_data'),
     path('freezer-data/last/', views.get_last_freezer_sensor_data, name='get_last_freezer_sensor_data'),
     path('freezer-data/last/all/', views.get_last_freezer_sensor_data_all_devices, name='get_last_freezer_sensor_data_all_devices'),

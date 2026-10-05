@@ -1,10 +1,11 @@
 from django.contrib import admin
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
-from .auth_views import ObtainAuthTokenView
+from .auth_views import ObtainAuthTokenView, client_register
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('api/v1/auth/register/', client_register, name='client_register'),
     path('api/v1/auth/token/', ObtainAuthTokenView.as_view(), name='api_token_auth'),
     path('api/v1/', include('freezer_data.urls')),
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

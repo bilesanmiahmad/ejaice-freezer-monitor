@@ -37,8 +37,11 @@ if [ -n "$DJANGO_SUPERUSER_USERNAME" ] && [ -n "$DJANGO_SUPERUSER_PASSWORD" ] &&
 fi
 
 : "${PORT:=8000}"
+: "${SERVER:=uvicorn}"
 
-if [ "${SERVER:-uvicorn}" = "gunicorn" ]; then
+echo "Starting app server: ${SERVER} on port ${PORT}"
+
+if [ "${SERVER}" = "gunicorn" ]; then
     exec gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers ${GUNICORN_WORKERS:-1}
 else
     exec uvicorn config.asgi:application --host 0.0.0.0 --port $PORT --workers ${GUNICORN_WORKERS:-1} --limit-concurrency ${UVICORN_LIMIT_CONCURRENCY:-30} --lifespan off

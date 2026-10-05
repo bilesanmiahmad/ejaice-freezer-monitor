@@ -1,12 +1,22 @@
+import json
+import logging
+
+from django.contrib.auth import get_user_model
 from django.db.models import OuterRef, Subquery
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from .models import Freezer, FreezerSensorData
+from .permissions import (
+    IsBackOfficeAdmin,
+    freezers_for_user,
+    sensor_data_for_user,
+)
 from .serializers import (
+    FreezerAssignSerializer,
     FreezerCreateSerializer,
     FreezerSerializer,
     FreezerSensorDataResponseSerializer,
@@ -15,21 +25,31 @@ from .serializers import (
 
 FREEZER_LOOKUP_PARAMS = ('device_id', 'batch_code', 'serial_number')
 
+logger = logging.getLogger(__name__)
 
-def _latest_records_per_field(field_name):
-    latest_pk = FreezerSensorData.objects.filter(
+
+def _log_request_body(action, request):
+    try:
+        body = json.dumps(request.data, default=str)
+    except TypeError:
+        body = str(request.data)
+    logger.info('%s request body: %s', action, body)
+
+
+def _latest_records_per_field(field_name, queryset):
+    latest_pk = queryset.filter(
         **{field_name: OuterRef(field_name)},
     ).order_by('-created_at').values('pk')[:1]
 
     latest_pks = (
-        FreezerSensorData.objects
+        queryset
         .values(field_name)
         .distinct()
         .annotate(latest_pk=Subquery(latest_pk))
         .values_list('latest_pk', flat=True)
     )
 
-    return FreezerSensorData.objects.filter(pk__in=latest_pks).order_by('-created_at')
+    return queryset.filter(pk__in=latest_pks).order_by('-created_at')
 
 
 @extend_schema(
@@ -39,7 +59,9 @@ def _latest_records_per_field(field_name):
     responses={201: FreezerSensorDataResponseSerializer},
 )
 @api_view(['POST'])
+@permission_classes([IsBackOfficeAdmin])
 def create_freezer_sensor_data(request):
+    _log_request_body('Freezer sensor ingest', request)
     serializer = FreezerSensorDataSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     instance = serializer.save()
@@ -53,7 +75,8 @@ def create_freezer_sensor_data(request):
 )
 @api_view(['GET'])
 def get_last_freezer_sensor_data(request):
-    last_record = FreezerSensorData.objects.order_by('-created_at').first()
+    queryset = sensor_data_for_user(request.user)
+    last_record = queryset.order_by('-created_at').first()
     if not last_record:
         return Response({'detail': 'No freezer sensor records found.'}, status=status.HTTP_404_NOT_FOUND)
     return Response(FreezerSensorDataResponseSerializer(last_record).data, status=status.HTTP_200_OK)
@@ -67,7 +90,8 @@ def get_last_freezer_sensor_data(request):
 )
 @api_view(['GET'])
 def get_last_freezer_sensor_data_all_devices(request):
-    records = _latest_records_per_field('device_id')
+    queryset = sensor_data_for_user(request.user)
+    records = _latest_records_per_field('device_id', queryset)
     serializer = FreezerSensorDataResponseSerializer(records, many=True)
     return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -80,7 +104,8 @@ def get_last_freezer_sensor_data_all_devices(request):
 )
 @api_view(['GET'])
 def get_last_freezer_sensor_data_all_serials(request):
-    records = _latest_records_per_field('serial_number')
+    queryset = sensor_data_for_user(request.user)
+    records = _latest_records_per_field('serial_number', queryset)
     serializer = FreezerSensorDataResponseSerializer(records, many=True)
     return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -92,7 +117,8 @@ def get_last_freezer_sensor_data_all_serials(request):
 )
 @api_view(['GET'])
 def get_last_freezer_sensor_data_by_device(request, device_id):
-    last_record = FreezerSensorData.objects.filter(device_id=device_id).order_by('-created_at').first()
+    queryset = sensor_data_for_user(request.user)
+    last_record = queryset.filter(device_id=device_id).order_by('-created_at').first()
     if not last_record:
         return Response({'detail': 'No freezer sensor records found for this device.'}, status=status.HTTP_404_NOT_FOUND)
     return Response(FreezerSensorDataResponseSerializer(last_record).data, status=status.HTTP_200_OK)
@@ -108,10 +134,10 @@ def get_last_freezer_sensor_data_by_device(request, device_id):
 @extend_schema(
     tags=['Freezers'],
     methods=['GET'],
-    summary='List all freezers or look up by identifier',
+    summary='List freezers or look up by identifier',
     description=(
-        'With no query parameters, returns all registered freezers. '
-        'With exactly one of `device_id`, `batch_code`, or `serial_number`, returns matching freezers.'
+        'Clients see only freezers assigned to them. Admins see all freezers. '
+        'Optional query: exactly one of `device_id`, `batch_code`, or `serial_number`.'
     ),
     parameters=[
         OpenApiParameter(name='device_id', type=str, location=OpenApiParameter.QUERY, required=False),
@@ -123,11 +149,15 @@ def get_last_freezer_sensor_data_by_device(request, device_id):
 @api_view(['GET', 'POST'])
 def freezer_list_create(request):
     if request.method == 'POST':
+        if not IsBackOfficeAdmin().has_permission(request, None):
+            return Response({'detail': IsBackOfficeAdmin.message}, status=status.HTTP_403_FORBIDDEN)
+        _log_request_body('Freezer registration', request)
         serializer = FreezerCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         freezer = serializer.save()
         return Response(FreezerSerializer(freezer).data, status=status.HTTP_201_CREATED)
 
+    freezers = freezers_for_user(request.user)
     provided = [
         (param, request.query_params.get(param))
         for param in FREEZER_LOOKUP_PARAMS
@@ -142,11 +172,9 @@ def freezer_list_create(request):
 
     if len(provided) == 1:
         field_name, value = provided[0]
-        freezers = Freezer.objects.filter(**{field_name: value})
+        freezers = freezers.filter(**{field_name: value})
         if not freezers.exists():
             return Response({'detail': 'No registered freezer found.'}, status=status.HTTP_404_NOT_FOUND)
-    else:
-        freezers = Freezer.objects.all()
 
     return Response(FreezerSerializer(freezers, many=True).data, status=status.HTTP_200_OK)
 
@@ -158,22 +186,48 @@ def freezer_list_create(request):
 )
 @api_view(['GET'])
 def get_freezer_detail(request, pk):
-    freezer = get_object_or_404(Freezer, pk=pk)
+    freezer = get_object_or_404(freezers_for_user(request.user), pk=pk)
     return Response(FreezerSerializer(freezer).data, status=status.HTTP_200_OK)
 
 
 @extend_schema(
     tags=['Freezers'],
     summary='Toggle freezer status',
-    description='Sets status to 0 if currently 1, or to 1 if currently 0.',
+    description='Sets status to 0 if currently 1, or to 1 if currently 0. Admin only.',
     request=None,
     responses={200: FreezerSerializer},
 )
 @api_view(['PATCH'])
+@permission_classes([IsBackOfficeAdmin])
 def toggle_freezer_status(request, pk):
     freezer = get_object_or_404(Freezer, pk=pk)
     freezer.status = (
         Freezer.Status.OFF if freezer.status == Freezer.Status.ON else Freezer.Status.ON
     )
     freezer.save(update_fields=['status', 'updated_at'])
+    return Response(FreezerSerializer(freezer).data, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    tags=['Freezers'],
+    summary='Assign freezer to a client user',
+    description='Admin only. Pass `client_user_id` to assign, or null to unassign.',
+    request=FreezerAssignSerializer,
+    responses={200: FreezerSerializer},
+)
+@api_view(['PATCH'])
+@permission_classes([IsBackOfficeAdmin])
+def assign_freezer_client(request, pk):
+    freezer = get_object_or_404(Freezer, pk=pk)
+    serializer = FreezerAssignSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    client_user_id = serializer.validated_data.get('client_user_id')
+
+    if client_user_id is None:
+        freezer.client = None
+    else:
+        User = get_user_model()
+        freezer.client = get_object_or_404(User, pk=client_user_id, is_staff=False)
+
+    freezer.save(update_fields=['client', 'updated_at'])
     return Response(FreezerSerializer(freezer).data, status=status.HTTP_200_OK)

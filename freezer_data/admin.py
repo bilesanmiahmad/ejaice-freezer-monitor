@@ -4,9 +4,10 @@ from .models import Freezer, FreezerSensorData
 
 @admin.register(Freezer)
 class FreezerAdmin(admin.ModelAdmin):
-    list_display = ('id', 'serial_number', 'device_id', 'batch_code', 'chip_mac', 'status', 'updated_at')
-    search_fields = ('serial_number', 'device_id', 'chip_mac', 'batch_code')
+    list_display = ('id', 'serial_number', 'device_id', 'client', 'status', 'updated_at')
+    search_fields = ('serial_number', 'device_id', 'chip_mac', 'batch_code', 'client__email')
     list_filter = ('status', 'created_at')
+    raw_id_fields = ('client',)
 
 
 @admin.register(FreezerSensorData)

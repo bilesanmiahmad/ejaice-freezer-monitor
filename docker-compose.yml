@@ -17,10 +17,7 @@ services:
 
   web:
     build: .
-    command: >
-      sh -c "python manage.py migrate &&
-             python manage.py collectstatic --noinput &&
-             uvicorn config.asgi:application --host 0.0.0.0 --port 8000 --workers $${GUNICORN_WORKERS:-1} --limit-concurrency $${UVICORN_LIMIT_CONCURRENCY:-30} --lifespan off"
+    command: ["sh", "/app/start.sh"]
     volumes:
       - .:/app
       - static_volume:/app/staticfiles
@@ -33,8 +30,7 @@ services:
         condition: service_healthy
     environment:
       - DB_HOST=db
-      - GUNICORN_WORKERS=${GUNICORN_WORKERS:-1}
-      - UVICORN_LIMIT_CONCURRENCY=${UVICORN_LIMIT_CONCURRENCY:-30}
+      - PORT=8000
 
 volumes:
   postgres_data:

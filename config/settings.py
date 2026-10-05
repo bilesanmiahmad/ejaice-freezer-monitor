@@ -122,9 +122,25 @@ SPECTACULAR_SETTINGS = {
     'SERVE_PERMISSIONS': ['rest_framework.permissions.AllowAny'],
     'TAGS': [
         {'name': 'Freezer data', 'description': 'Ingest and query freezer telemetry'},
-        {'name': 'Freezers', 'description': 'Registered freezer lookup'},
-        {'name': 'Auth', 'description': 'Obtain API tokens'},
+        {'name': 'Freezers', 'description': 'Registered freezer lookup and assignment'},
+        {'name': 'Auth', 'description': 'Client sign-up and login'},
     ],
 }
 
 CORS_ALLOW_ALL_ORIGINS = config('CORS_ALLOW_ALL_ORIGINS', default='True') == 'True'
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        'freezer_data': {
+            'handlers': ['console'],
+            'level': 'INFO',
+        },
+    },
+}

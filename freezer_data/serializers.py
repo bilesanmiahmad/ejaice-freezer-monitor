@@ -1,7 +1,11 @@
 import math
 
+from django.contrib.auth import get_user_model
 from rest_framework import serializers
+from .auth_validators import validate_client_password
 from .models import Freezer, FreezerSensorData
+
+User = get_user_model()
 
 FREEZER_SENSOR_FLOAT_FIELDS = (
     'temperature',
@@ -26,6 +30,8 @@ def sanitize_json_float(value):
 
 class FreezerSerializer(serializers.ModelSerializer):
     status_label = serializers.CharField(source='get_status_display', read_only=True)
+    client_user_id = serializers.IntegerField(source='client_id', read_only=True, allow_null=True)
+    client_email = serializers.EmailField(source='client.email', read_only=True, allow_null=True)
 
     class Meta:
         model = Freezer
@@ -37,10 +43,61 @@ class FreezerSerializer(serializers.ModelSerializer):
             'chip_mac',
             'status',
             'status_label',
+            'client_user_id',
+            'client_email',
             'created_at',
             'updated_at',
         ]
         read_only_fields = fields
+
+
+class FreezerAssignSerializer(serializers.Serializer):
+    client_user_id = serializers.IntegerField(required=False, allow_null=True)
+
+    def validate_client_user_id(self, value):
+        if value is None:
+            return None
+        try:
+            user = User.objects.get(pk=value)
+        except User.DoesNotExist as exc:
+            raise serializers.ValidationError('Client user not found.') from exc
+        if user.is_staff:
+            raise serializers.ValidationError('Cannot assign a freezer to a back-office admin account.')
+        return value
+
+
+class ClientRegisterSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True, trim_whitespace=False)
+
+    def validate_email(self, value):
+        email = value.lower().strip()
+        if User.objects.filter(username=email).exists():
+            raise serializers.ValidationError('An account with this email already exists.')
+        return email
+
+    def validate_password(self, value):
+        return validate_client_password(value)
+
+    def create(self, validated_data):
+        email = validated_data['email']
+        return User.objects.create_user(
+            username=email,
+            email=email,
+            password=validated_data['password'],
+            is_staff=False,
+        )
+
+
+class ClientLoginSerializer(serializers.Serializer):
+    username = serializers.EmailField(help_text='Account email address')
+    password = serializers.CharField(write_only=True, trim_whitespace=False)
+
+    def validate_username(self, value):
+        return value.lower().strip()
+
+    def validate_password(self, value):
+        return validate_client_password(value)
 
 
 class FreezerCreateSerializer(serializers.ModelSerializer):
