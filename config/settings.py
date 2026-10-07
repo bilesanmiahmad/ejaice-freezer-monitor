@@ -123,6 +123,7 @@ SPECTACULAR_SETTINGS = {
     'TAGS': [
         {'name': 'Freezer data', 'description': 'Ingest and query freezer telemetry'},
         {'name': 'Freezers', 'description': 'Registered freezer lookup and assignment'},
+        {'name': 'Export', 'description': 'Admin CSV exports of telemetry data'},
         {'name': 'Auth', 'description': 'Client sign-up and login'},
     ],
 }

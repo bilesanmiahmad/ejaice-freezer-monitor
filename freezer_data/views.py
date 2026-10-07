@@ -3,12 +3,20 @@ import logging
 
 from django.contrib.auth import get_user_model
 from django.db.models import OuterRef, Subquery
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
+from django.utils.timezone import now
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
+from .csv_export import build_sensor_export_queryset, parse_freezer_ids, render_sensor_data_csv
+from .openapi import (
+    CSV_EXPORT_DESCRIPTION,
+    CSV_EXPORT_QUERY_PARAMETERS,
+    CSV_EXPORT_RESPONSES,
+)
 from .models import Freezer, FreezerSensorData
 from .permissions import (
     IsBackOfficeAdmin,
@@ -122,6 +130,39 @@ def get_last_freezer_sensor_data_by_device(request, device_id):
     if not last_record:
         return Response({'detail': 'No freezer sensor records found for this device.'}, status=status.HTTP_404_NOT_FOUND)
     return Response(FreezerSensorDataResponseSerializer(last_record).data, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    tags=['Export'],
+    summary='Export telemetry as CSV',
+    description=CSV_EXPORT_DESCRIPTION,
+    parameters=CSV_EXPORT_QUERY_PARAMETERS,
+    responses=CSV_EXPORT_RESPONSES,
+)
+@api_view(['GET'])
+@permission_classes([IsBackOfficeAdmin])
+def export_freezer_sensor_data_csv(request):
+    try:
+        freezer_ids = parse_freezer_ids(request.query_params.get('freezer_ids'))
+    except ValueError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        queryset = build_sensor_export_queryset(
+            date=request.query_params.get('date'),
+            start_date=request.query_params.get('start_date'),
+            end_date=request.query_params.get('end_date'),
+            client_email=request.query_params.get('client_email'),
+            freezer_ids=freezer_ids,
+        )
+    except ValueError as exc:
+        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+    csv_body = render_sensor_data_csv(queryset)
+    filename = f'freezer_sensor_data_{now().strftime("%Y%m%d_%H%M%S")}.csv'
+    response = HttpResponse(csv_body, content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
 
 
 @extend_schema(

@@ -104,6 +104,7 @@ python manage.py createsuperuser
 - `GET /api/v1/freezer-data/last/all/` latest row per freezer (`device_id`)
 - `GET /api/v1/freezer-data/last/all/serial/` latest row per freezer (`serial_number`)
 - `GET /api/v1/freezer-data/device/{device_id}/` latest row by device
+- `GET /api/v1/freezer-data/export/` download telemetry CSV (**admin / staff only**; optional query: `date`, `start_date`, `end_date`, `client_email`, `freezer_ids`)
 - `GET /api/schema/` OpenAPI schema (public)
 - `GET /api/docs/` Swagger UI (public; use **Authorize** to add your token for try-it-out requests)
 - `GET /api/redoc/` ReDoc (public)
